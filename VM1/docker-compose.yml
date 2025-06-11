@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  redis-master:
+    image: redis:7.4.4
+    container_name: redis-master
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - redis-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-sentinel:
+    image: redis:7.4.4
+    container_name: redis-sentinel
+    restart: always
+    ports:
+      - "26379:26379"
+    volumes:
+      - ./sentinel.conf:/usr/local/etc/redis/sentinel.conf
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    networks:
+      - redis-network
+    depends_on:
+      - redis-master
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  haproxy:
+    image: haproxy:3.1.8
+    container_name: redis-haproxy
+    restart: always
+    ports:
+      - "6380:6380"  # Redis Write
+      - "6381:6381"  # Redis Read
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - redis-network
+    depends_on:
+      - redis-master
+      - redis-sentinel
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  redis-network:
+    driver: bridge

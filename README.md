@@ -1,30 +1,30 @@
-# Redis Sentinel 3-VM Docker Kurulum Rehberi
+# Redis Sentinel 3-VM Docker Deployment Guide
 
-Bu rehber, 3 farklı VM üzerinde Docker Compose kullanarak HAProxy destekli Redis Sentinel kümesini kurmak isteyen kullanıcılar için hazırlanmıştır.
-
----
-
-## 📌 Kullanılan Sunucular
-
-- **VM1**: Master Redis + HAProxy
-- **VM2**: Slave Redis + Sentinel
-- **VM3**: Slave Redis + Sentinel
+This repository provides a high-availability Redis Sentinel cluster setup using **Docker Compose** across **three virtual machines (VMs)** with **HAProxy** as the load balancer.
 
 ---
 
-## 🔧 1. Sunucu Hazırlığı (Her 3 VM’de)
+## 📌 Server Roles
 
-### Sistem Güncellemesi
+- **VM1**: Redis Master + HAProxy
+- **VM2**: Redis Slave + Sentinel
+- **VM3**: Redis Slave + Sentinel
+
+---
+
+## 🔧 1. Initial Server Setup (All VMs)
+
+### System Update
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-### Gerekli Paketlerin Kurulumu
+### Required Package Installation
 ```bash
 sudo apt install -y curl wget net-tools ufw
 ```
 
-### Firewall Ayarları
+### Firewall Configuration
 ```bash
 sudo ufw allow 6379/tcp
 sudo ufw allow 26379/tcp
@@ -32,7 +32,7 @@ sudo ufw allow 22/tcp
 sudo ufw --force enable
 ```
 
-### Kernel Parametrelerini Ayarlama
+### Kernel Parameters for Redis
 ```bash
 echo 'vm.overcommit_memory = 1' | sudo tee -a /etc/sysctl.conf
 echo 'net.core.somaxconn = 65535' | sudo tee -a /etc/sysctl.conf
@@ -40,7 +40,7 @@ echo 'fs.file-max = 100000' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
-### Transparent Huge Pages’i Devre Dışı Bırakma
+### Disable Transparent Huge Pages
 ```bash
 echo 'never' | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 echo 'never' | sudo tee /sys/kernel/mm/transparent_hugepage/defrag
@@ -51,16 +51,16 @@ sudo chmod +x /etc/rc.local
 
 ---
 
-## 📁 2. Dizin Yapısı ve Dosyaların Yerleştirilmesi
+## 📁 2. Directory Structure and Configuration Files
 
-Her VM’de:
+On each VM:
 ```bash
 mkdir -p ~/redis-sentinel
 cd ~/redis-sentinel
 mkdir -p redis-data
 ```
 
-Gerekli `docker-compose.yml`, `redis.conf`, `sentinel.conf`, ve gerekiyorsa `haproxy.cfg` dosyalarını bu dizine kopyalayın. IP adreslerini kendi ortamınıza göre düzenlemeyi unutmayın.
+Place your `docker-compose.yml`, `redis.conf`, `sentinel.conf`, and optionally `haproxy.cfg` files into this directory. Adjust IP addresses and node names according to your environment.
 
 ```bash
 chmod 644 redis.conf sentinel.conf
@@ -69,15 +69,15 @@ chmod 755 redis-data
 
 ---
 
-## 🚀 3. Redis & Sentinel Başlatma
+## 🚀 3. Starting the Services
 
-### VM1 (Master Redis + HAProxy)
+### VM1 (Redis Master + HAProxy)
 ```bash
 cd ~/redis-sentinel
 docker-compose up -d
 ```
 
-### VM2 & VM3 (Slave Redis + Sentinel)
+### VM2 and VM3 (Redis Slave + Sentinel)
 ```bash
 cd ~/redis-sentinel
 docker-compose up -d
@@ -85,7 +85,7 @@ docker-compose up -d
 
 ---
 
-## ✅ 4. Durum Kontrolü
+## ✅ 4. Health Checks and Cluster Status
 
 ```bash
 docker ps
@@ -93,24 +93,24 @@ docker exec redis-master redis-cli info replication
 docker exec redis-sentinel redis-cli -p 26379 sentinel masters
 ```
 
-HAProxy Arayüzü:  
+HAProxy stats UI:  
 `http://<VM1-IP>:8080`
 
 ---
 
-## 🔁 5. Replikasyon ve Failover Testi
+## 🔁 5. Replication and Failover Test
 
-### Master’a Veri Yazma
+### Write to Master
 ```bash
 docker exec redis-master redis-cli set test-key "test-value"
 ```
 
-### Slave’den Veri Okuma
+### Read from Slaves
 ```bash
 docker exec redis-slave redis-cli get test-key
 ```
 
-### Master Düğümünü Kapatıp Failover Testi
+### Simulate Failover by Stopping Master
 ```bash
 docker stop redis-master
 docker exec redis-sentinel redis-cli -p 26379 sentinel masters
@@ -118,7 +118,7 @@ docker exec redis-sentinel redis-cli -p 26379 sentinel masters
 
 ---
 
-## 📊 6. Monitoring ve Loglar
+## 📊 6. Logs and Monitoring
 
 ```bash
 docker logs -f redis-master
@@ -134,23 +134,23 @@ docker exec redis-master redis-cli info server
 
 ---
 
-## 🔐 7. Güvenlik Notları
+## 🔐 7. Security Recommendations
 
-- Production ortamında Redis şifre koruması kullanın.
-- UFW ile sadece ihtiyaç duyulan IP'lere bağlantı izni verin.
-- Gerekirse SSL/TLS kullanın.
-- Logları merkezi bir sistemde yönetin ve periyodik olarak temizleyin.
-
----
-
-## ⚙️ 8. HAProxy Entegrasyonu (Önerilen)
-
-### Avantajları:
-- **Tek giriş noktası (Single Entry Point)**
-- **Şeffaf Failover**
-- **Read/Write trafiğinin ayrılması**
-- **Bağlantı havuzu yönetimi (Connection Pooling)**
+- Always enable Redis authentication in production.
+- Restrict firewall rules to only trusted sources.
+- Consider enabling SSL/TLS encryption.
+- Centralize and rotate logs periodically.
 
 ---
 
-Bu adımları tamamlayan herkes, Redis Sentinel kümesini Docker üzerinden yüksek erişilebilirlikli bir yapıda ayağa kaldırabilir.
+## ⚙️ 8. HAProxy Integration (Recommended)
+
+### Benefits:
+- **Single entry point** for Redis connections
+- **Transparent failover** for applications
+- **Read/write separation** (direct reads to slaves)
+- **Efficient connection pooling**
+
+---
+
+By following this guide, you can deploy a robust and highly available Redis Sentinel cluster with Docker Compose and HAProxy across three nodes.
